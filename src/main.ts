@@ -109,8 +109,11 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 	}
 
 	// カレンダー上で「勤怠が入力済みの営業日」をカウントする。
-	// 平日（土日祝・所定休日でない日）のうち、出勤レコードが入力されている日のみ。
-	// 未入力の日（未来日や入力忘れ）は分母にも分子にも入らないので、
+	// 平日（土日祝・所定休日でない日）のうち、出勤レコード（work）または
+	// 有給休暇（paid-holiday）が入力されている日。
+	// 有給休暇日は「総勤務時間」側にも所定労働時間分（既定 8h）が即座に加算されるため、
+	// 分母にも 1 日として加算しないと過不足が崩れる（その日の +8h が丸ごと残ってしまう）。
+	// 未入力の平日（未来日や入力忘れ）は分母にも分子にも入らないので、
 	// 「途中まで」でも純粋な進捗を測れる。
 	function countWorkRecordedBusinessDays(): number {
 		const tbl = document.querySelector<HTMLTableElement>('table.employee-work-record-calendar');
@@ -118,11 +121,11 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 		let count = 0;
 		tbl.querySelectorAll<HTMLTableCellElement>('td.day').forEach((td) => {
 			const cls = td.classList;
-			if (!cls.contains('work')) return; // 勤怠入力済みでない日は対象外
 			if (cls.contains('out-of-range')) return; // 月外
 			if (cls.contains('prescribed-holiday')) return; // 所定休日（休日出勤は対象外）
 			if (cls.contains('legal-holiday')) return; // 法定休日（休日出勤は対象外）
-			count++;
+			// 出勤レコードあり、もしくは有給休暇日のみカウント
+			if (cls.contains('work') || cls.contains('paid-holiday')) count++;
 		});
 		return count;
 	}

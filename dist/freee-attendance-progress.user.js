@@ -101,11 +101,10 @@
       let count = 0;
       tbl.querySelectorAll("td.day").forEach((td) => {
         const cls = td.classList;
-        if (!cls.contains("work")) return;
         if (cls.contains("out-of-range")) return;
         if (cls.contains("prescribed-holiday")) return;
         if (cls.contains("legal-holiday")) return;
-        count++;
+        if (cls.contains("work") || cls.contains("paid-holiday")) count++;
       });
       return count;
     }

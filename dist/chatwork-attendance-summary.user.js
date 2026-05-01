@@ -125,6 +125,20 @@
       return `打刻： ${punchStr} 　実働： ${workStr}`;
     }
   }
+  function buildNoteText(s) {
+    if (s.leaveShortageMin > 0) return `※休憩短縮${s.leaveShortageMin}分`;
+    if (s.leaveOvertimeMin > 0) return `※休憩延長${s.leaveOvertimeMin}分`;
+    return "";
+  }
+  function buildJsonPayload(s) {
+    const payload = {
+      punchTime: formatTimeOfDay(s.punchTs),
+      workMin: Math.round(s.workSec / 60),
+      leaveTotalMin: Math.round(s.leaveTotalSec / 60),
+      note: buildNoteText(s)
+    };
+    return JSON.stringify(payload);
+  }
   function formatRawMessages(messages) {
     return messages.map((m) => {
       const d = new Date(m.timestamp * 1e3);
@@ -248,6 +262,13 @@
       showSettingsDialog(loadConfig(), () => {
       });
     });
+    const copyJsonBtn = makeBtn("JSON でコピー", "#8e44ad", () => {
+      if (!summary) return;
+      navigator.clipboard.writeText(buildJsonPayload(summary)).then(() => {
+        copyJsonBtn.textContent = "コピーしました";
+        setTimeout(() => copyJsonBtn.textContent = "JSON でコピー", 1500);
+      });
+    });
     const copyBtn = makeBtn("サマリをコピー", "#4caf50", () => {
       if (!summary) return;
       navigator.clipboard.writeText(formatSummaryLine(summary)).then(() => {
@@ -255,9 +276,13 @@
         setTimeout(() => copyBtn.textContent = "サマリをコピー", 1500);
       });
     });
-    if (!summary) copyBtn.disabled = true;
+    if (!summary) {
+      copyBtn.disabled = true;
+      copyJsonBtn.disabled = true;
+    }
     btnRow.appendChild(settingsBtn);
     btnRow.appendChild(closeBtn);
+    btnRow.appendChild(copyJsonBtn);
     btnRow.appendChild(copyBtn);
     box.appendChild(title);
     box.appendChild(summaryArea);

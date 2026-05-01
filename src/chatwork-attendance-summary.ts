@@ -181,6 +181,22 @@ function formatSummaryLine(s: Summary): string {
   }
 }
 
+function buildNoteText(s: Summary): string {
+  if (s.leaveShortageMin > 0) return `※休憩短縮${s.leaveShortageMin}分`;
+  if (s.leaveOvertimeMin > 0) return `※休憩延長${s.leaveOvertimeMin}分`;
+  return '';
+}
+
+function buildJsonPayload(s: Summary): string {
+  const payload = {
+    punchTime: formatTimeOfDay(s.punchTs),
+    workMin: Math.round(s.workSec / 60),
+    leaveTotalMin: Math.round(s.leaveTotalSec / 60),
+    note: buildNoteText(s),
+  };
+  return JSON.stringify(payload);
+}
+
 function formatRawMessages(messages: RawMessage[]): string {
   return messages
     .map((m) => {
@@ -335,6 +351,13 @@ function showResultDialog(summary: Summary | null, raw: RawMessage[]): void {
     close();
     showSettingsDialog(loadConfig(), () => {/* 再実行は手動で */});
   });
+  const copyJsonBtn = makeBtn('JSON でコピー', '#8e44ad', () => {
+    if (!summary) return;
+    navigator.clipboard.writeText(buildJsonPayload(summary)).then(() => {
+      copyJsonBtn.textContent = 'コピーしました';
+      setTimeout(() => (copyJsonBtn.textContent = 'JSON でコピー'), 1500);
+    });
+  });
   const copyBtn = makeBtn('サマリをコピー', '#4caf50', () => {
     if (!summary) return;
     navigator.clipboard.writeText(formatSummaryLine(summary)).then(() => {
@@ -342,10 +365,14 @@ function showResultDialog(summary: Summary | null, raw: RawMessage[]): void {
       setTimeout(() => (copyBtn.textContent = 'サマリをコピー'), 1500);
     });
   });
-  if (!summary) (copyBtn as HTMLButtonElement).disabled = true;
+  if (!summary) {
+    (copyBtn as HTMLButtonElement).disabled = true;
+    (copyJsonBtn as HTMLButtonElement).disabled = true;
+  }
 
   btnRow.appendChild(settingsBtn);
   btnRow.appendChild(closeBtn);
+  btnRow.appendChild(copyJsonBtn);
   btnRow.appendChild(copyBtn);
 
   box.appendChild(title);

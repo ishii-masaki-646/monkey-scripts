@@ -10,7 +10,7 @@ export default defineConfig({
 				namespace: 'https://github.com/ishii-masaki-646/monkey-scripts',
 				match: ['https://p.secure.freee.co.jp/*'],
 				version: '0.1.0',
-				description: '前日までの実労働時間に対する過不足（営業日数 × 所定労働時間との差）をヘッダーに表示する',
+				description: '勤怠入力済みの営業日数 × 所定労働時間 と総勤務時間の差をヘッダーに表示する',
 				author: 'ishii-masaki-646',
 				downloadURL: 'https://raw.githubusercontent.com/ishii-masaki-646/monkey-scripts/main/dist/freee-attendance-progress.user.js',
 				updateURL: 'https://raw.githubusercontent.com/ishii-masaki-646/monkey-scripts/main/dist/freee-attendance-progress.user.js',

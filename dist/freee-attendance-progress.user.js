@@ -3,7 +3,7 @@
 // @namespace    https://github.com/ishii-masaki-646/monkey-scripts
 // @version      0.1.0
 // @author       ishii-masaki-646
-// @description  前日までの実労働時間に対する過不足（営業日数 × 所定労働時間との差）をヘッダーに表示する
+// @description  勤怠入力済みの営業日数 × 所定労働時間 と総勤務時間の差をヘッダーに表示する
 // @downloadURL  https://raw.githubusercontent.com/ishii-masaki-646/monkey-scripts/main/dist/freee-attendance-progress.user.js
 // @updateURL    https://raw.githubusercontent.com/ishii-masaki-646/monkey-scripts/main/dist/freee-attendance-progress.user.js
 // @match        https://p.secure.freee.co.jp/*
@@ -31,7 +31,7 @@
       const fusokuLabel = findLabel(itemsContainer, "不足時間");
       const insertAfter = (fusokuLabel == null ? void 0 : fusokuLabel.parentElement) ?? totalItem;
       const totalMinutes = parseHourMinute(totalText);
-      const businessDays = countBusinessDaysBeforeToday();
+      const businessDays = countWorkRecordedBusinessDays();
       const expectedMinutes = Math.round(businessDays * STANDARD_HOURS_PER_DAY * 60);
       const diffMinutes = totalMinutes - expectedMinutes;
       const key = `${totalText}|${businessDays}|${STANDARD_HOURS_PER_DAY}`;
@@ -95,22 +95,16 @@
       const m = Math.round((hours - h) * 60);
       return m === 0 ? `${h}h` : `${h}h${m}m`;
     }
-    function countBusinessDaysBeforeToday() {
+    function countWorkRecordedBusinessDays() {
       const tbl = document.querySelector("table.employee-work-record-calendar");
       if (!tbl) return 0;
-      const today = /* @__PURE__ */ new Date();
-      today.setHours(0, 0, 0, 0);
       let count = 0;
       tbl.querySelectorAll("td.day").forEach((td) => {
         const cls = td.classList;
+        if (!cls.contains("work")) return;
         if (cls.contains("out-of-range")) return;
         if (cls.contains("prescribed-holiday")) return;
         if (cls.contains("legal-holiday")) return;
-        const dateStr = td.dataset.date;
-        if (!dateStr) return;
-        const d = /* @__PURE__ */ new Date(dateStr + "T00:00:00");
-        if (Number.isNaN(d.getTime())) return;
-        if (d >= today) return;
         count++;
       });
       return count;

@@ -31,7 +31,7 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 		const insertAfter = fusokuLabel?.parentElement ?? totalItem;
 
 		const totalMinutes = parseHourMinute(totalText);
-		const businessDays = countBusinessDaysBeforeToday();
+		const businessDays = countWorkRecordedBusinessDays();
 		const expectedMinutes = Math.round(businessDays * STANDARD_HOURS_PER_DAY * 60);
 		const diffMinutes = totalMinutes - expectedMinutes;
 
@@ -108,23 +108,20 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 		return m === 0 ? `${h}h` : `${h}h${m}m`;
 	}
 
-	function countBusinessDaysBeforeToday(): number {
+	// カレンダー上で「勤怠が入力済みの営業日」をカウントする。
+	// 平日（土日祝・所定休日でない日）のうち、出勤レコードが入力されている日のみ。
+	// 未入力の日（未来日や入力忘れ）は分母にも分子にも入らないので、
+	// 「途中まで」でも純粋な進捗を測れる。
+	function countWorkRecordedBusinessDays(): number {
 		const tbl = document.querySelector<HTMLTableElement>('table.employee-work-record-calendar');
 		if (!tbl) return 0;
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
-
 		let count = 0;
 		tbl.querySelectorAll<HTMLTableCellElement>('td.day').forEach((td) => {
 			const cls = td.classList;
-			if (cls.contains('out-of-range')) return;
-			if (cls.contains('prescribed-holiday')) return;
-			if (cls.contains('legal-holiday')) return;
-			const dateStr = td.dataset.date;
-			if (!dateStr) return;
-			const d = new Date(dateStr + 'T00:00:00');
-			if (Number.isNaN(d.getTime())) return;
-			if (d >= today) return; // 当日以降は対象外（前日まで）
+			if (!cls.contains('work')) return; // 勤怠入力済みでない日は対象外
+			if (cls.contains('out-of-range')) return; // 月外
+			if (cls.contains('prescribed-holiday')) return; // 所定休日（休日出勤は対象外）
+			if (cls.contains('legal-holiday')) return; // 法定休日（休日出勤は対象外）
 			count++;
 		});
 		return count;

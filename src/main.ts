@@ -31,12 +31,12 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 		const insertAfter = fusokuLabel?.parentElement ?? totalItem;
 
 		const totalMinutes = parseHourMinute(totalText);
-		const businessDays = countWorkRecordedBusinessDays();
-		const expectedMinutes = Math.round(businessDays * STANDARD_HOURS_PER_DAY * 60);
+		const workDays = getWorkDays(itemsContainer);
+		const expectedMinutes = Math.round(workDays * STANDARD_HOURS_PER_DAY * 60);
 		const diffMinutes = totalMinutes - expectedMinutes;
 
 		// 入力が変わらず、かつ自身の item が DOM に残っていれば何もしない（無限ループ回避）
-		const key = `${totalText}|${businessDays}|${STANDARD_HOURS_PER_DAY}`;
+		const key = `${totalText}|${workDays}|${STANDARD_HOURS_PER_DAY}`;
 		const existing = itemsContainer.querySelector<HTMLElement>(`.${ITEM_CLASS}`);
 		if (key === lastKey && existing) return;
 		lastKey = key;
@@ -108,25 +108,16 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 		return m === 0 ? `${h}h` : `${h}h${m}m`;
 	}
 
-	// カレンダー上で「勤怠が入力済みの営業日」をカウントする。
-	// 平日（土日祝・所定休日でない日）のうち、出勤レコード（work）または
-	// 有給休暇（paid-holiday）が入力されている日。
-	// 有給休暇日は「総勤務時間」側にも所定労働時間分（既定 8h）が即座に加算されるため、
-	// 分母にも 1 日として加算しないと過不足が崩れる（その日の +8h が丸ごと残ってしまう）。
-	// 未入力の平日（未来日や入力忘れ）は分母にも分子にも入らないので、
-	// 「途中まで」でも純粋な進捗を測れる。
-	function countWorkRecordedBusinessDays(): number {
-		const tbl = document.querySelector<HTMLTableElement>('table.employee-work-record-calendar');
-		if (!tbl) return 0;
-		let count = 0;
-		tbl.querySelectorAll<HTMLTableCellElement>('td.day').forEach((td) => {
-			const cls = td.classList;
-			if (cls.contains('out-of-range')) return; // 月外
-			if (cls.contains('prescribed-holiday')) return; // 所定休日（休日出勤は対象外）
-			if (cls.contains('legal-holiday')) return; // 法定休日（休日出勤は対象外）
-			// 出勤レコードあり、もしくは有給休暇日のみカウント
-			if (cls.contains('work') || cls.contains('paid-holiday')) count++;
-		});
-		return count;
+	// freee の集計エリアにある「労働日数」をそのまま分母として使う。
+	// 出勤日 + 有給日 + 特別休暇日 などを合算した値で、半日有給「0.5日」のような
+	// 小数表記もこの値で吸収される。「総勤務時間」との対応関係も freee 側で
+	// 整っているため、過不足計算のずれが起きにくい。
+	function getWorkDays(container: HTMLElement): number {
+		const lbl = findLabel(container, '労働日数');
+		if (!lbl) return 0;
+		const body = lbl.parentElement?.querySelector<HTMLElement>('.body');
+		const text = (body?.textContent ?? '').trim();
+		const m = text.match(/(\d+(?:\.\d+)?)/);
+		return m ? parseFloat(m[1]) : 0;
 	}
 })();

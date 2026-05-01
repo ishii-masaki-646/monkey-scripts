@@ -31,10 +31,10 @@
       const fusokuLabel = findLabel(itemsContainer, "不足時間");
       const insertAfter = (fusokuLabel == null ? void 0 : fusokuLabel.parentElement) ?? totalItem;
       const totalMinutes = parseHourMinute(totalText);
-      const businessDays = countWorkRecordedBusinessDays();
-      const expectedMinutes = Math.round(businessDays * STANDARD_HOURS_PER_DAY * 60);
+      const workDays = getWorkDays(itemsContainer);
+      const expectedMinutes = Math.round(workDays * STANDARD_HOURS_PER_DAY * 60);
       const diffMinutes = totalMinutes - expectedMinutes;
-      const key = `${totalText}|${businessDays}|${STANDARD_HOURS_PER_DAY}`;
+      const key = `${totalText}|${workDays}|${STANDARD_HOURS_PER_DAY}`;
       const existing = itemsContainer.querySelector(`.${ITEM_CLASS}`);
       if (key === lastKey && existing) return;
       lastKey = key;
@@ -95,18 +95,14 @@
       const m = Math.round((hours - h) * 60);
       return m === 0 ? `${h}h` : `${h}h${m}m`;
     }
-    function countWorkRecordedBusinessDays() {
-      const tbl = document.querySelector("table.employee-work-record-calendar");
-      if (!tbl) return 0;
-      let count = 0;
-      tbl.querySelectorAll("td.day").forEach((td) => {
-        const cls = td.classList;
-        if (cls.contains("out-of-range")) return;
-        if (cls.contains("prescribed-holiday")) return;
-        if (cls.contains("legal-holiday")) return;
-        if (cls.contains("work") || cls.contains("paid-holiday")) count++;
-      });
-      return count;
+    function getWorkDays(container) {
+      var _a;
+      const lbl = findLabel(container, "労働日数");
+      if (!lbl) return 0;
+      const body = (_a = lbl.parentElement) == null ? void 0 : _a.querySelector(".body");
+      const text = ((body == null ? void 0 : body.textContent) ?? "").trim();
+      const m = text.match(/(\d+(?:\.\d+)?)/);
+      return m ? parseFloat(m[1]) : 0;
     }
   })();
 

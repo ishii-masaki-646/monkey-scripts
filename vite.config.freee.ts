@@ -4,7 +4,7 @@ import monkey from 'vite-plugin-monkey';
 export default defineConfig({
 	plugins: [
 		monkey({
-			entry: 'src/main.ts',
+			entry: 'src/freee-attendance-progress.ts',
 			userscript: {
 				name: 'freee 勤怠 - 日次過不足(8h)表示',
 				namespace: 'https://github.com/ishii-masaki-646/monkey-scripts',

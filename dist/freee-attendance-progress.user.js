@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         freee 勤怠 - 日次過不足(8h)表示
 // @namespace    https://github.com/ishii-masaki-646/monkey-scripts
-// @version      0.1.0
+// @version      0.1.1
 // @author       ishii-masaki-646
 // @description  前日までの実労働時間に対する過不足（営業日数 × 所定労働時間との差）をヘッダーに表示する
 // @downloadURL  https://raw.githubusercontent.com/ishii-masaki-646/monkey-scripts/main/dist/freee-attendance-progress.user.js
@@ -15,31 +15,30 @@
   const STANDARD_HOURS_PER_DAY = 8;
   const ITEM_CLASS = "vmonkey-progress-item";
   (function() {
-    const observer = new MutationObserver(() => {
-      render();
-    });
+    const observer = new MutationObserver(() => render());
     observer.observe(document.body, { childList: true, subtree: true });
     render();
     let lastKey = "";
     function render() {
       const itemsContainer = document.querySelector(".items.main-items");
       if (!itemsContainer) return;
-      const totalLabel = Array.from(itemsContainer.querySelectorAll(".label")).find(
-        (e) => (e.textContent ?? "").trim() === "総勤務時間"
-      );
+      const totalLabel = findLabel(itemsContainer, "総勤務時間");
       if (!totalLabel) return;
       const totalItem = totalLabel.parentElement;
-      const totalBody = totalItem == null ? void 0 : totalItem.querySelector(".body");
+      const totalBody = totalItem.querySelector(".body");
       const totalText = ((totalBody == null ? void 0 : totalBody.textContent) ?? "").trim();
       if (!totalText) return;
+      const fusokuLabel = findLabel(itemsContainer, "不足時間");
+      const insertAfter = (fusokuLabel == null ? void 0 : fusokuLabel.parentElement) ?? totalItem;
       const totalMinutes = parseHourMinute(totalText);
       const businessDays = countBusinessDaysBeforeToday();
       const expectedMinutes = Math.round(businessDays * STANDARD_HOURS_PER_DAY * 60);
       const diffMinutes = totalMinutes - expectedMinutes;
       const key = `${totalText}|${businessDays}|${STANDARD_HOURS_PER_DAY}`;
-      if (key === lastKey) return;
+      const existing = itemsContainer.querySelector(`.${ITEM_CLASS}`);
+      if (key === lastKey && existing) return;
       lastKey = key;
-      let myItem = itemsContainer.querySelector(`.${ITEM_CLASS}`);
+      let myItem = existing;
       if (!myItem) {
         myItem = document.createElement("div");
         myItem.className = `item ${ITEM_CLASS}`;
@@ -50,22 +49,45 @@
         body2.className = "body";
         myItem.appendChild(lbl);
         myItem.appendChild(body2);
-        totalItem.parentNode.insertBefore(myItem, totalItem.nextSibling);
       }
+      insertAfter.parentNode.insertBefore(myItem, insertAfter.nextSibling);
       const body = myItem.querySelector(".body");
-      body.textContent = formatDiff(diffMinutes);
+      fillHourMinBody(body, diffMinutes);
+    }
+    function findLabel(container, text) {
+      return Array.from(container.querySelectorAll(".label")).find(
+        (e) => (e.textContent ?? "").trim() === text
+      );
     }
     function parseHourMinute(text) {
-      const m = text.match(/(\d+)\s*時間\s*(\d+)\s*分/);
+      const m = text.match(/(\d+)\s*時間(?:\s*(\d+)\s*分)?/);
       if (!m) return 0;
-      return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+      return parseInt(m[1], 10) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
     }
-    function formatDiff(min) {
-      const sign = min >= 0 ? "+" : "-";
-      const abs = Math.abs(min);
+    function fillHourMinBody(body, diffMin) {
+      body.textContent = "";
+      const wrap = document.createElement("span");
+      wrap.className = "hour-min";
+      const sign = diffMin > 0 ? "+" : diffMin < 0 ? "-" : "";
+      const abs = Math.abs(diffMin);
       const h = Math.floor(abs / 60);
       const m = abs % 60;
-      return `${sign}${h}時間${m}分`;
+      wrap.appendChild(buildSegment("hour", `${sign}${h}`, "時間"));
+      wrap.appendChild(buildSegment("min", `${m}`, "分"));
+      body.appendChild(wrap);
+    }
+    function buildSegment(kind, value, unit) {
+      const seg = document.createElement("span");
+      seg.className = `hour-min__${kind}`;
+      const val = document.createElement("span");
+      val.className = "hour-min__value";
+      val.textContent = value;
+      const u = document.createElement("span");
+      u.className = "hour-min__unit";
+      u.textContent = unit;
+      seg.appendChild(val);
+      seg.appendChild(u);
+      return seg;
     }
     function formatStandard(hours) {
       if (Number.isInteger(hours)) return `${hours}h`;

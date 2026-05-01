@@ -9,9 +9,7 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 
 	// freee 勤怠は SPA。月切替やハッシュ遷移で DOM が動的に変わるので、
 	// MutationObserver で再描画ごとにこちらの計算 / 表示を更新する。
-	const observer = new MutationObserver(() => {
-		render();
-	});
+	const observer = new MutationObserver(() => render());
 	observer.observe(document.body, { childList: true, subtree: true });
 	render();
 
@@ -21,26 +19,29 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 		const itemsContainer = document.querySelector<HTMLElement>('.items.main-items');
 		if (!itemsContainer) return;
 
-		const totalLabel = Array.from(itemsContainer.querySelectorAll<HTMLElement>('.label')).find(
-			(e) => (e.textContent ?? '').trim() === '総勤務時間',
-		);
+		const totalLabel = findLabel(itemsContainer, '総勤務時間');
 		if (!totalLabel) return;
-		const totalItem = totalLabel.parentElement;
-		const totalBody = totalItem?.querySelector<HTMLElement>('.body');
+		const totalItem = totalLabel.parentElement!;
+		const totalBody = totalItem.querySelector<HTMLElement>('.body');
 		const totalText = (totalBody?.textContent ?? '').trim();
 		if (!totalText) return;
+
+		// 挿入位置の基準: 「不足時間」の直後 = 末尾。無ければ「総勤務時間」の直後。
+		const fusokuLabel = findLabel(itemsContainer, '不足時間');
+		const insertAfter = fusokuLabel?.parentElement ?? totalItem;
 
 		const totalMinutes = parseHourMinute(totalText);
 		const businessDays = countBusinessDaysBeforeToday();
 		const expectedMinutes = Math.round(businessDays * STANDARD_HOURS_PER_DAY * 60);
 		const diffMinutes = totalMinutes - expectedMinutes;
 
-		// 入力が変わったときだけ描画（再帰トリガー回避）
+		// 入力が変わらず、かつ自身の item が DOM に残っていれば何もしない（無限ループ回避）
 		const key = `${totalText}|${businessDays}|${STANDARD_HOURS_PER_DAY}`;
-		if (key === lastKey) return;
+		const existing = itemsContainer.querySelector<HTMLElement>(`.${ITEM_CLASS}`);
+		if (key === lastKey && existing) return;
 		lastKey = key;
 
-		let myItem = itemsContainer.querySelector<HTMLElement>(`.${ITEM_CLASS}`);
+		let myItem = existing;
 		if (!myItem) {
 			myItem = document.createElement('div');
 			myItem.className = `item ${ITEM_CLASS}`;
@@ -51,25 +52,52 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 			body.className = 'body';
 			myItem.appendChild(lbl);
 			myItem.appendChild(body);
-			totalItem!.parentNode!.insertBefore(myItem, totalItem!.nextSibling);
 		}
+		// 末尾（「不足時間」item の直後）へ移動 / 挿入
+		insertAfter.parentNode!.insertBefore(myItem, insertAfter.nextSibling);
+
 		const body = myItem.querySelector<HTMLElement>('.body')!;
-		body.textContent = formatDiff(diffMinutes);
+		fillHourMinBody(body, diffMinutes);
+	}
+
+	function findLabel(container: HTMLElement, text: string): HTMLElement | undefined {
+		return Array.from(container.querySelectorAll<HTMLElement>('.label')).find(
+			(e) => (e.textContent ?? '').trim() === text,
+		);
 	}
 
 	function parseHourMinute(text: string): number {
-		// "173時間32分" → 173*60+32
-		const m = text.match(/(\d+)\s*時間\s*(\d+)\s*分/);
+		// "173時間32分" / "168時間" の両方に対応
+		const m = text.match(/(\d+)\s*時間(?:\s*(\d+)\s*分)?/);
 		if (!m) return 0;
-		return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+		return parseInt(m[1], 10) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
 	}
 
-	function formatDiff(min: number): string {
-		const sign = min >= 0 ? '+' : '-';
-		const abs = Math.abs(min);
+	function fillHourMinBody(body: HTMLElement, diffMin: number) {
+		body.textContent = '';
+		const wrap = document.createElement('span');
+		wrap.className = 'hour-min';
+		const sign = diffMin > 0 ? '+' : diffMin < 0 ? '-' : '';
+		const abs = Math.abs(diffMin);
 		const h = Math.floor(abs / 60);
 		const m = abs % 60;
-		return `${sign}${h}時間${m}分`;
+		wrap.appendChild(buildSegment('hour', `${sign}${h}`, '時間'));
+		wrap.appendChild(buildSegment('min', `${m}`, '分'));
+		body.appendChild(wrap);
+	}
+
+	function buildSegment(kind: 'hour' | 'min', value: string, unit: string): HTMLSpanElement {
+		const seg = document.createElement('span');
+		seg.className = `hour-min__${kind}`;
+		const val = document.createElement('span');
+		val.className = 'hour-min__value';
+		val.textContent = value;
+		const u = document.createElement('span');
+		u.className = 'hour-min__unit';
+		u.textContent = unit;
+		seg.appendChild(val);
+		seg.appendChild(u);
+		return seg;
 	}
 
 	function formatStandard(hours: number): string {
@@ -89,9 +117,9 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 		let count = 0;
 		tbl.querySelectorAll<HTMLTableCellElement>('td.day').forEach((td) => {
 			const cls = td.classList;
-			if (cls.contains('out-of-range')) return; // 月外
-			if (cls.contains('prescribed-holiday')) return; // 所定休日
-			if (cls.contains('legal-holiday')) return; // 法定休日
+			if (cls.contains('out-of-range')) return;
+			if (cls.contains('prescribed-holiday')) return;
+			if (cls.contains('legal-holiday')) return;
 			const dateStr = td.dataset.date;
 			if (!dateStr) return;
 			const d = new Date(dateStr + 'T00:00:00');

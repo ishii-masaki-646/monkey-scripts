@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite -c vite.config.freee.ts",
-    "build": "vite build -c vite.config.freee.ts",
+    "dev:freee": "vite -c vite.config.freee.ts",
+    "dev:chatwork": "vite -c vite.config.chatwork.ts",
+    "build": "vite build -c vite.config.freee.ts && vite build -c vite.config.chatwork.ts",
+    "build:freee": "vite build -c vite.config.freee.ts",
+    "build:chatwork": "vite build -c vite.config.chatwork.ts",
     "preview": "vite preview"
   },
   "devDependencies": {

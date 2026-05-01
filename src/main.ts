@@ -7,36 +7,37 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 (function () {
 	'use strict';
 
-	// freee 勤怠は SPA。月切替やハッシュ遷移で DOM が動的に変わるので、
-	// MutationObserver で再描画ごとにこちらの計算 / 表示を更新する。
-	const observer = new MutationObserver(() => render());
-	observer.observe(document.body, { childList: true, subtree: true });
-	render();
+	const STANDARD_MIN = Math.round(STANDARD_HOURS_PER_DAY * 60);
+
+	// 勤怠編集画面 (#work_records/...) のときだけ計算/表示する。
+	// freee 全体に @match を当てているので、それ以外のページでは何もしない。
+	const isTarget = () => location.hash.startsWith('#work_records');
 
 	let lastKey = '';
 
 	function render() {
+		if (!isTarget()) return;
+
 		const itemsContainer = document.querySelector<HTMLElement>('.items.main-items');
 		if (!itemsContainer) return;
 
-		const totalLabel = findLabel(itemsContainer, '総勤務時間');
-		if (!totalLabel) return;
-		const totalItem = totalLabel.parentElement!;
-		const totalBody = totalItem.querySelector<HTMLElement>('.body');
-		const totalText = (totalBody?.textContent ?? '').trim();
-		if (!totalText) return;
+		// freee 側のテスト用属性 [data-test] で要素取得（UI 文言変更に強い）
+		const daysEl = itemsContainer.querySelector<HTMLElement>('[data-test="労働日数"]');
+		const totalEl = itemsContainer.querySelector<HTMLElement>('[data-test="総勤務時間"]');
+		const shortageItem = itemsContainer
+			.querySelector<HTMLElement>('[data-test="不足時間"]')
+			?.closest<HTMLElement>('.item');
+		if (!daysEl || !totalEl || !shortageItem) return;
 
-		// 挿入位置の基準: 「不足時間」の直後 = 末尾。無ければ「総勤務時間」の直後。
-		const fusokuLabel = findLabel(itemsContainer, '不足時間');
-		const insertAfter = fusokuLabel?.parentElement ?? totalItem;
+		const days = parseFloat((daysEl.textContent ?? '').trim());
+		const totalMin = parseHourMin(totalEl);
+		if (!Number.isFinite(days) || totalMin == null) return;
 
-		const totalMinutes = parseHourMinute(totalText);
-		const workDays = getWorkDays(itemsContainer);
-		const expectedMinutes = Math.round(workDays * STANDARD_HOURS_PER_DAY * 60);
-		const diffMinutes = totalMinutes - expectedMinutes;
+		const expectedMin = Math.round(days * STANDARD_MIN);
+		const diffMin = totalMin - expectedMin;
 
 		// 入力が変わらず、かつ自身の item が DOM に残っていれば何もしない（無限ループ回避）
-		const key = `${totalText}|${workDays}|${STANDARD_HOURS_PER_DAY}`;
+		const key = `${days}|${totalMin}|${STANDARD_HOURS_PER_DAY}`;
 		const existing = itemsContainer.querySelector<HTMLElement>(`.${ITEM_CLASS}`);
 		if (key === lastKey && existing) return;
 		lastKey = key;
@@ -53,34 +54,35 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 			myItem.appendChild(lbl);
 			myItem.appendChild(body);
 		}
-		// 末尾（「不足時間」item の直後）へ移動 / 挿入
-		insertAfter.parentNode!.insertBefore(myItem, insertAfter.nextSibling);
+		shortageItem.insertAdjacentElement('afterend', myItem);
 
 		const body = myItem.querySelector<HTMLElement>('.body')!;
-		fillHourMinBody(body, diffMinutes);
+		fillHourMinBody(body, diffMin);
 	}
 
-	function findLabel(container: HTMLElement, text: string): HTMLElement | undefined {
-		return Array.from(container.querySelectorAll<HTMLElement>('.label')).find(
-			(e) => (e.textContent ?? '').trim() === text,
-		);
-	}
-
-	function parseHourMinute(text: string): number {
-		// "173時間32分" / "168時間" の両方に対応
-		const m = text.match(/(\d+)\s*時間(?:\s*(\d+)\s*分)?/);
-		if (!m) return 0;
-		return parseInt(m[1], 10) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
+	// freee の hour-min DOM 構造から「H時間M分」を分数値に変換。
+	// "173時間32分" のテキスト正規表現パースより正確で速い。
+	function parseHourMin(el: HTMLElement | null): number | null {
+		if (!el) return null;
+		const h = el.querySelector<HTMLElement>('.hour-min__hour .hour-min__value');
+		const m = el.querySelector<HTMLElement>('.hour-min__min .hour-min__value');
+		if (!h && !m) return null;
+		const hv = h ? Number(h.textContent ?? '0') : 0;
+		const mv = m ? Number(m.textContent ?? '0') : 0;
+		if (!Number.isFinite(hv) || !Number.isFinite(mv)) return null;
+		return hv * 60 + mv;
 	}
 
 	function fillHourMinBody(body: HTMLElement, diffMin: number) {
 		body.textContent = '';
-		const wrap = document.createElement('span');
-		wrap.className = 'hour-min';
 		const sign = diffMin > 0 ? '+' : diffMin < 0 ? '-' : '';
+		// + (進捗超過) はオレンジ、- (進捗不足) は赤、0 はグレー
+		body.style.color = diffMin > 0 ? '#d97706' : diffMin < 0 ? '#c33' : '#666';
 		const abs = Math.abs(diffMin);
 		const h = Math.floor(abs / 60);
 		const m = abs % 60;
+		const wrap = document.createElement('span');
+		wrap.className = 'hour-min';
 		wrap.appendChild(buildSegment('hour', `${sign}${h}`, '時間'));
 		wrap.appendChild(buildSegment('min', `${m}`, '分'));
 		body.appendChild(wrap);
@@ -108,16 +110,9 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 		return m === 0 ? `${h}h` : `${h}h${m}m`;
 	}
 
-	// freee の集計エリアにある「労働日数」をそのまま分母として使う。
-	// 出勤日 + 有給日 + 特別休暇日 などを合算した値で、半日有給「0.5日」のような
-	// 小数表記もこの値で吸収される。「総勤務時間」との対応関係も freee 側で
-	// 整っているため、過不足計算のずれが起きにくい。
-	function getWorkDays(container: HTMLElement): number {
-		const lbl = findLabel(container, '労働日数');
-		if (!lbl) return 0;
-		const body = lbl.parentElement?.querySelector<HTMLElement>('.body');
-		const text = (body?.textContent ?? '').trim();
-		const m = text.match(/(\d+(?:\.\d+)?)/);
-		return m ? parseFloat(m[1]) : 0;
-	}
+	// SPA の DOM 変化と、ハッシュベースの月切替・社員切替の双方に追従する
+	const observer = new MutationObserver(() => render());
+	observer.observe(document.body, { childList: true, subtree: true });
+	window.addEventListener('hashchange', render);
+	render();
 })();

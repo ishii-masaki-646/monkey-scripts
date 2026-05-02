@@ -17,11 +17,11 @@
   const STORAGE_KEY = "chatwork-attendance-summary:config";
   const SEARCH_WORD = "勤怠";
   const STANDARD_BREAK_MIN = 60;
-  async function fetchAttendanceMessages(cfg) {
+  async function fetchAttendanceMessages(cfg, dateStr) {
     var _a, _b;
     const token = window.ACCESS_TOKEN;
     if (!token) throw new Error("ACCESS_TOKEN が未取得です。Chatwork のページをリロードしてください。");
-    const range = getWorkdayRange();
+    const range = getWorkdayRange(dateStr);
     const pdata = {
       room_id: parseInt(cfg.roomId, 10),
       opt: {
@@ -45,15 +45,29 @@
     const msgDat = ((_b = data.result) == null ? void 0 : _b.msg_dat) ?? {};
     return Object.values(msgDat).map((m) => ({ timestamp: m.tm, body: m.msg })).sort((a, b) => a.timestamp - b.timestamp);
   }
-  function getWorkdayRange() {
+  function getWorkdayBaseDate(dateStr) {
+    if (dateStr) {
+      const [y, m, d] = dateStr.split("-").map((s) => parseInt(s, 10));
+      return new Date(y, m - 1, d);
+    }
     const now = /* @__PURE__ */ new Date();
     const base = new Date(now);
     if (now.getHours() < 5) base.setDate(base.getDate() - 1);
+    return new Date(base.getFullYear(), base.getMonth(), base.getDate());
+  }
+  function getWorkdayRange(dateStr) {
+    const base = getWorkdayBaseDate(dateStr);
     const from = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 5, 0, 0);
     const to = new Date(from);
     to.setDate(to.getDate() + 1);
     to.setSeconds(to.getSeconds() - 1);
     return { from: Math.floor(from.getTime() / 1e3), to: Math.floor(to.getTime() / 1e3) };
+  }
+  function formatDateInputValue(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   }
   function parseEvent(msg) {
     const body = msg.body.replace(/#勤怠\s*/g, "").replace(/#テレワーク\s*/g, "").trim();
@@ -61,10 +75,14 @@
     if (fixedMatch) {
       return { timestamp: msg.timestamp, type: "leave-fixed", raw: body, durationSec: parseInt(fixedMatch[1], 10) * 60 };
     }
+    if (body.includes("#業務開始")) return { timestamp: msg.timestamp, type: "start", raw: body };
+    if (body.includes("#業務中断")) return { timestamp: msg.timestamp, type: "leave-start", raw: body };
+    if (body.includes("#業務再開")) return { timestamp: msg.timestamp, type: "leave-end", raw: body };
+    if (body.includes("#業務終了")) return { timestamp: msg.timestamp, type: "end", raw: body };
     if (/業務再開/.test(body)) return { timestamp: msg.timestamp, type: "leave-end", raw: body };
-    if (/離席|昼休憩開始/.test(body)) return { timestamp: msg.timestamp, type: "leave-start", raw: body };
-    if (/退勤|終業|お疲れ/.test(body)) return { timestamp: msg.timestamp, type: "end", raw: body };
-    if (/出勤|始業|おはよう/.test(body)) return { timestamp: msg.timestamp, type: "start", raw: body };
+    if (/離席|昼休憩開始|中抜け(?:致|いた)?します/.test(body)) return { timestamp: msg.timestamp, type: "leave-start", raw: body };
+    if (/退勤|終業|お疲れ|業務を?終了|(?:これにて|お先に)失礼/.test(body)) return { timestamp: msg.timestamp, type: "end", raw: body };
+    if (/出勤|始業|おはよう|業務を?開始/.test(body)) return { timestamp: msg.timestamp, type: "start", raw: body };
     return { timestamp: msg.timestamp, type: "unknown", raw: body };
   }
   function computeSummary(events) {
@@ -225,11 +243,24 @@
     box.appendChild(error);
     box.appendChild(btnRow);
   }
-  function showResultDialog(summary, raw) {
+  function showResultDialog(summary, raw, dateStr) {
     const { box, close } = buildModal();
+    const titleRow = document.createElement("div");
+    titleRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:12px;";
     const title = document.createElement("div");
-    title.textContent = "本日の勤怠サマリ";
+    title.textContent = "勤怠サマリ";
     title.style.cssText = "font-weight:bold;font-size:16px;";
+    const dateInput = document.createElement("input");
+    dateInput.type = "date";
+    dateInput.value = dateStr;
+    dateInput.style.cssText = "padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px;";
+    dateInput.addEventListener("change", () => {
+      if (!dateInput.value) return;
+      close();
+      void runFlow(dateInput.value);
+    });
+    titleRow.appendChild(title);
+    titleRow.appendChild(dateInput);
     const summaryArea = document.createElement("div");
     summaryArea.style.cssText = "background:#f5f7fa;border:1px solid #d8dde5;border-radius:6px;padding:14px;font-size:15px;font-family:monospace;line-height:1.6;";
     const summaryText = summary ? formatSummaryLine(summary) : "集計できる勤怠記録がありません(出勤メッセージ、または退勤メッセージが見つかりません)";
@@ -284,7 +315,7 @@
     btnRow.appendChild(closeBtn);
     btnRow.appendChild(copyJsonBtn);
     btnRow.appendChild(copyBtn);
-    box.appendChild(title);
+    box.appendChild(titleRow);
     box.appendChild(summaryArea);
     if (summary) box.appendChild(supplement);
     box.appendChild(rawArea);
@@ -297,19 +328,20 @@
     b.addEventListener("click", onclick);
     return b;
   }
-  async function runFlow() {
+  async function runFlow(dateStr) {
     const cfg = loadConfig();
     if (!cfg) {
-      showSettingsDialog(null, () => runFlow());
+      showSettingsDialog(null, () => runFlow(dateStr));
       return;
     }
+    const effectiveDate = formatDateInputValue(getWorkdayBaseDate(dateStr));
     const btn = document.getElementById(BTN_ID);
     if (btn) btn.innerHTML = SPINNER_SVG;
     try {
-      const messages = await fetchAttendanceMessages(cfg);
+      const messages = await fetchAttendanceMessages(cfg, effectiveDate);
       const events = messages.map(parseEvent);
       const summary = computeSummary(events);
-      showResultDialog(summary, messages);
+      showResultDialog(summary, messages, effectiveDate);
     } catch (e) {
       alert(e.message);
     } finally {

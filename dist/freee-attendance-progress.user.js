@@ -18,7 +18,7 @@
   const ITEM_CLASS = "vmonkey-progress-item";
   (function() {
     const STANDARD_MIN = Math.round(STANDARD_HOURS_PER_DAY * 60);
-    const isTarget = () => location.hash.startsWith("#work_records");
+    const isTarget = () => location.hash.startsWith("#/work_records");
     let lastKey = "";
     function render() {
       var _a;

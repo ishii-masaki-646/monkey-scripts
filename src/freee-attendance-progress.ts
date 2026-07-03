@@ -9,9 +9,9 @@ const ITEM_CLASS = 'vmonkey-progress-item';
 
   const STANDARD_MIN = Math.round(STANDARD_HOURS_PER_DAY * 60);
 
-  // 勤怠編集画面 (#work_records/...) のときだけ計算/表示する。
+  // 勤怠編集画面 (#/work_records/...) のときだけ計算/表示する。
   // freee 全体に @match を当てているので、それ以外のページでは何もしない。
-  const isTarget = () => location.hash.startsWith('#work_records');
+  const isTarget = () => location.hash.startsWith('#/work_records');
 
   let lastKey = '';
 

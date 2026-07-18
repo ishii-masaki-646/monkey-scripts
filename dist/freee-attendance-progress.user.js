@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         freee 勤怠 - 日次過不足(8h)表示
 // @namespace    https://github.com/ishii-masaki-646/monkey-scripts
-// @version      0.1.0
+// @version      0.1.1
 // @author       ishii-masaki-646
 // @description  勤怠入力済みの営業日数 × 所定労働時間 と総勤務時間の差をヘッダーに表示する
 // @downloadURL  https://raw.githubusercontent.com/ishii-masaki-646/monkey-scripts/main/dist/freee-attendance-progress.user.js
@@ -18,7 +18,7 @@
   const ITEM_CLASS = "vmonkey-progress-item";
   (function() {
     const STANDARD_MIN = Math.round(STANDARD_HOURS_PER_DAY * 60);
-    const isTarget = () => location.hash.startsWith("#work_records");
+    const isTarget = () => location.hash.startsWith("#/work_records");
     let lastKey = "";
     function render() {
       var _a;

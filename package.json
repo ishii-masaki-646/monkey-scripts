@@ -7,9 +7,13 @@
     "dev": "vite -c vite.config.freee.ts",
     "dev:freee": "vite -c vite.config.freee.ts",
     "dev:chatwork": "vite -c vite.config.chatwork.ts",
-    "build": "vite build -c vite.config.freee.ts && vite build -c vite.config.chatwork.ts",
+    "dev:note-api-write-tap": "vite -c vite.config.note-api-write-tap.ts",
+    "dev:jimakocha-fishing-countdown-helper": "vite -c vite.config.jimakocha-fishing-countdown-helper.ts",
+    "build": "vite build -c vite.config.freee.ts && vite build -c vite.config.chatwork.ts && vite build -c vite.config.note-api-write-tap.ts && vite build -c vite.config.jimakocha-fishing-countdown-helper.ts",
     "build:freee": "vite build -c vite.config.freee.ts",
     "build:chatwork": "vite build -c vite.config.chatwork.ts",
+    "build:note-api-write-tap": "vite build -c vite.config.note-api-write-tap.ts",
+    "build:jimakocha-fishing-countdown-helper": "vite build -c vite.config.jimakocha-fishing-countdown-helper.ts",
     "preview": "vite preview"
   },
   "devDependencies": {
